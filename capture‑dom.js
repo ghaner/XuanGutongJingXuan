@@ -3,35 +3,54 @@ const fs = require('fs');
 const path = require('path');
 
 (async () => {
-  const browser = await chromium.launch({ headless: true });
-  const page = await browser.newPage();
-
-  // 打开本地打包好的静态页面文件，file协议
-  const localHtmlPath = path.resolve('./dist/jingxuan_full.html');
-  await page.goto(`file://${localHtmlPath}`, { waitUntil: 'networkidle', timeout: 60000 });
-
-  // ==========在这里写你的页面交互逻辑，触发全部动态渲染==========
-  // 1.滚动页面到底部，触发无限滚动加载更多数据
-  await page.evaluate(async () => {
-    window.scrollTo(0, document.body.scrollHeight);
-    await new Promise(resolve => setTimeout(resolve, 3000));
+  // 启动浏览器，关闭CORS限制，规避file://跨域API请求问题
+  const browser = await chromium.launch({
+    headless: true,
+    args: [
+      '--disable-web-security',
+      '--disable-features=IsolateOrigins,site-per-process'
+    ]
   });
 
-  // 2.示例：点击Tab切换，渲染其他标签页内容，修改选择器适配你页面
-  // await page.click('[data-tab="longhu"]');
-  // await page.waitForTimeout(2000);
+  const context = await browser.newContext();
+  const page = await context.newPage();
 
-  // 等待所有网络请求、组件渲染完毕
-  await page.waitForLoadState('networkidle');
+  // 读取nuxt generate输出的本地静态html
+  const targetHtml = path.resolve('./dist/jingxuan_full.html');
+  const fileUrl = `file://${targetHtml}`;
 
-  // 抓取浏览器运行时完整DOM（等价于Elements面板复制outerHTML）
-  const fullDomHtml = await page.evaluate(() => {
+  console.log('打开本地文件：', fileUrl);
+
+  // 加载页面，等待网络空闲，总超时60秒
+  await page.goto(fileUrl, {
+    waitUntil: 'networkidle',
+    timeout: 60000
+  });
+
+  // 1.滚动到底部，触发无限滚动加载列表数据
+  await page.evaluate(async () => {
+    window.scrollTo(0, document.body.scrollHeight);
+    await new Promise(resolve => setTimeout(resolve, 4000));
+  });
+
+  // 可按需打开：切换tab示例，替换为你页面真实tab选择器
+  // await page.click('[role="tab"][data-key="longhu"]');
+  // await page.waitForTimeout(3000);
+
+  // 再次等待所有网络请求结束
+  await page.waitForLoadState('networkidle', { timeout: 60000 });
+
+  // 提取浏览器运行时完整DOM，等价于Elements面板复制outerHTML
+  const fullOuterHtml = await page.evaluate(() => {
     return document.documentElement.outerHTML;
   });
 
-  // 将完整DOM写入dist输出目录，随gh‑pages一起发布
-  fs.writeFileSync(path.resolve('./dist/full_dom.html'), fullDomHtml, 'utf‑8');
-  console.log("✅ 完整运行时DOM已输出 dist/full_dom.html");
+  // 写入dist目录，随gh‑pages发布
+  const outputPath = path.resolve('./dist/full_dom.html');
+  fs.writeFileSync(outputPath, fullOuterHtml, 'utf-8');
+
+  console.log('✅完整DOM已输出 -> dist/full_dom.html');
+  console.log('文件字节大小:', Buffer.byteLength(fullOuterHtml, 'utf-8'));
 
   await browser.close();
 })();
