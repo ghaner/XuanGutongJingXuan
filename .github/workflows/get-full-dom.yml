@@ -5,32 +5,33 @@ on:
 
 jobs:
   build-capture:
-    runs-on: ubuntu‑latest
+    runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout source
+        uses: actions/checkout@v4
 
-      # 1. 安装node，构建nuxt静态产物dist
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: 'npm'
-      - run: npm ci
-      - run: npx nuxi generate
 
-      # 2. 安装Playwright浏览器依赖
-      - name: Install Playwright
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Nuxt3 generate 静态构建
+        run: npx nuxi generate
+
+      - name: Install Playwright Chrome & system deps
         run: |
-          npx playwright install --with‑deps chrome
+          npx playwright install chrome
+          npx playwright install-deps chrome
 
-      # 3. 用node+playwright打开本地dist/index.html，模拟交互，导出完整DOM
-      - name: Capture full runtime DOM
+      - name: 执行脚本抓取完整运行时DOM
         run: node capture-dom.js
 
-      # capture-dom.js执行结束后，dist目录会多出 full_dom.html
-      # 接下来执行原有部署步骤，把dist全部推送到gh‑pages
-      - name: Deploy to gh‑pages
-        uses: peaceiris/actions‑gh‑pages@v4
+      - name: 部署产物到 gh‑pages
+        uses: peaceiris/actions-gh-pages@v4
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           publish_dir: ./dist
