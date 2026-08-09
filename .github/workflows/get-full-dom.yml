@@ -1,0 +1,36 @@
+name: 构建并抓取完整DOM
+on:
+  push:
+    branches: [ main ]
+
+jobs:
+  build-capture:
+    runs-on: ubuntu‑latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # 1. 安装node，构建nuxt静态产物dist
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: 'npm'
+      - run: npm ci
+      - run: npx nuxi generate
+
+      # 2. 安装Playwright浏览器依赖
+      - name: Install Playwright
+        run: |
+          npx playwright install --with‑deps chrome
+
+      # 3. 用node+playwright打开本地dist/index.html，模拟交互，导出完整DOM
+      - name: Capture full runtime DOM
+        run: node capture-dom.js
+
+      # capture-dom.js执行结束后，dist目录会多出 full_dom.html
+      # 接下来执行原有部署步骤，把dist全部推送到gh‑pages
+      - name: Deploy to gh‑pages
+        uses: peaceiris/actions‑gh‑pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./dist
